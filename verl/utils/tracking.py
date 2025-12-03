@@ -63,7 +63,11 @@ class Tracking:
         if "tracking" in default_backend or "wandb" in default_backend:
             import os
 
-            import wandb
+            try:
+                import swanlab as wandb
+                print("Using swanlab's wandb compatible interface for logging.")
+            except ImportError:
+                import wandb
 
             settings = None
             if config and config["trainer"].get("wandb_proxy", None):
@@ -359,7 +363,11 @@ class ValidationGenerationsLogger:
         self._log_generations_to_wandb(samples, step, vemlp_wandb)
 
     def log_generations_to_wandb(self, samples, step):
-        import wandb
+        try:
+            import swanlab as wandb
+            print("Using swanlab's wandb compatible interface for logging.")
+        except ImportError:
+            import wandb
 
         self._log_generations_to_wandb(samples, step, wandb)
 
