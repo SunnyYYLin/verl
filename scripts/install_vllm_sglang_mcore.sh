@@ -26,7 +26,9 @@ uv pip install "nvidia-ml-py>=12.560.30" "fastapi[standard]>=0.115.0" "optree>=0
 
 echo "3. install FlashAttention and FlashInfer"
 # Install flash-attn-2.8.1 (cxx11abi=False)
-MAX_JOBS=16 uv pip install --no-cache-dir flash_attn==2.8.1 --no-build-isolation
+# MAX_JOBS=16 uv pip install --no-cache-dir flash_attn==2.8.1 --no-build-isolation
+wget -nv https://ghfast.top/https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.1/flash_attn-2.8.1+cu12torch2.8cxx11abiFALSE-cp312-cp312-linux_x86_64.whl && \
+    pip install --no-cache-dir flash_attn-2.8.1+cu12torch2.8cxx11abiFALSE-cp312-cp312-linux_x86_64.whl
 MAX_JOBS=16 uv pip install --no-cache-dir flashinfer-python==0.3.1
 
 

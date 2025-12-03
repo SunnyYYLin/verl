@@ -24,4 +24,4 @@ HYDRA_FULL_ERROR=1 torchrun --standalone --nnodes=1 --nproc_per_node=$nproc_per_
     trainer.project_name=gsm8k-sft \
     trainer.experiment_name=gsm8k-sft-gemma-2b-it \
     trainer.total_epochs=2 \
-    trainer.logger='["console","wandb"]' $@
+    trainer.logger='["console","swanlab"]' $@
