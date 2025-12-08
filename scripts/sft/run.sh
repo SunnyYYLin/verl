@@ -2,14 +2,6 @@
 
 set -x
 
-target="debug"
-nproc_per_node=2
-max_prompt_length_by_k=32
-learning_rate=1e-4
-weight_decay=1e-5
-batch_size=256
-batch_size_per_gpu=8
-
 EXPERIMENT_NAME="${target}-32k-bs${batch_size}_p${batch_size_per_gpu}-lr${learning_rate}-wd${weight_decay}-gpu${nproc_per_node}"
 DATASET_DIR=$DATASETS/verl/Gene-CRE
 MODEL_DIR=$MODELS/HybriDNA-300M-base

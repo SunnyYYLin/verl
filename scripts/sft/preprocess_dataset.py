@@ -71,6 +71,7 @@ if __name__ == "__main__":
     if local_dataset_path is not None:
         dataset = datasets.load_dataset(local_dataset_path, "default")
     else:
+        # Force redownload / avoid using cached dataset files
         dataset = datasets.load_dataset(data_source, "default")
 
     train_dataset = dataset["train"]
