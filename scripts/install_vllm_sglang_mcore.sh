@@ -15,7 +15,7 @@ echo "2. install basic packages"
 uv pip install "transformers[hf_xet]>=4.51.0" accelerate datasets peft hf-transfer \
     "numpy<2.0.0" "pyarrow>=15.0.0" pandas "tensordict>=0.8.0,<=0.10.0,!=0.9.0" torchdata \
     ray[default] codetiming hydra-core pylatexenc qwen-vl-utils wandb dill pybind11 liger-kernel mathruler \
-    pytest py-spy pre-commit ruff tensorboard 
+    pytest py-spy pre-commit ruff tensorboard swanlab
 
 echo "pyext is lack of maintainace and cannot work with python 3.12."
 echo "if you need it for prime code rewarding, please install using patched fork:"
@@ -28,7 +28,7 @@ echo "3. install FlashAttention and FlashInfer"
 # Install flash-attn-2.8.1 (cxx11abi=False)
 # MAX_JOBS=16 uv pip install --no-cache-dir flash_attn==2.8.1 --no-build-isolation
 wget -nv https://ghfast.top/https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.1/flash_attn-2.8.1+cu12torch2.8cxx11abiFALSE-cp312-cp312-linux_x86_64.whl && \
-    pip install --no-cache-dir flash_attn-2.8.1+cu12torch2.8cxx11abiFALSE-cp312-cp312-linux_x86_64.whl
+    uv pip install --no-cache-dir flash_attn-2.8.1+cu12torch2.8cxx11abiFALSE-cp312-cp312-linux_x86_64.whl
 MAX_JOBS=16 uv pip install --no-cache-dir flashinfer-python==0.3.1
 
 
@@ -36,7 +36,7 @@ if [ $USE_MEGATRON -eq 1 ]; then
     echo "4. install TransformerEngine and Megatron"
     echo "Notice that TransformerEngine installation can take very long time, please be patient"
     uv pip install "onnxscript==0.3.1"
-    NVTE_FRAMEWORK=pytorch uv uv pip install --no-deps git+https://github.com/NVIDIA/TransformerEngine.git@v2.6
+    NVTE_FRAMEWORK=pytorch  uv pip install --no-deps git+https://github.com/NVIDIA/TransformerEngine.git@v2.6
     uv uv pip install --no-deps git+https://github.com/NVIDIA/Megatron-LM.git@core_v0.13.1
 fi
 
