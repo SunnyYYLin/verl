@@ -109,8 +109,17 @@ class BaseModelMerger(ABC):
         huggingface_subdir = os.path.join(self.hf_model_config_path, "huggingface")
         if os.path.isdir(huggingface_subdir):
             self.hf_model_config_path = huggingface_subdir
+        else:
+            # Try to find actor/huggingface
+            actor_subdir = os.path.join(self.hf_model_config_path, "actor")
+            actor_huggingface_subdir = os.path.join(actor_subdir, "huggingface")
+            if os.path.isdir(actor_huggingface_subdir):
+                print(f"Auto-detected actor subdirectory. Updating paths to {actor_subdir}")
+                self.hf_model_config_path = actor_huggingface_subdir
+                self.config.local_dir = actor_subdir
 
-        self.model_config = AutoConfig.from_pretrained(self.hf_model_config_path)
+        print(f"Loading HuggingFace config from {self.hf_model_config_path}")
+        self.model_config = AutoConfig.from_pretrained(self.hf_model_config_path, trust_remote_code=True)
 
     def get_transformers_auto_model_class(self):
         # Handle case where architectures might be None or empty
@@ -225,9 +234,9 @@ class BaseModelMerger(ABC):
         del state_dict
         del model
 
-        processor = hf_processor(self.hf_model_config_path)
+        processor = hf_processor(self.hf_model_config_path, trust_remote_code=True)
         try:
-            tokenizer = hf_tokenizer(self.hf_model_config_path)
+            tokenizer = hf_tokenizer(self.hf_model_config_path, trust_remote_code=True)
         except Exception as e:
             warnings.warn(f"Failed to create tokenizer: {e}. This may affect tokenizer saving", stacklevel=1)
             tokenizer = None

@@ -16,6 +16,7 @@ Preprocess the GSM8k dataset to parquet format
 """
 
 import datasets
+from onnx_ir import val
 from verl.utils.hdfs_io import copy, makedirs
 
 # add a row to each data item that represents a unique id
@@ -75,9 +76,11 @@ if __name__ == "__main__":
         dataset = datasets.load_dataset(data_source, "default")
 
     train_dataset = dataset["train"]
+    val_dataset = dataset["validation"]
     test_dataset = dataset["test"]
 
     train_dataset = train_dataset.map(function=make_map_fn("train"), with_indices=True)
+    val_dataset = val_dataset.map(function=make_map_fn("validation"), with_indices=True)
     test_dataset = test_dataset.map(function=make_map_fn("test"), with_indices=True)
 
     hdfs_dir = args.hdfs_dir
@@ -88,7 +91,9 @@ if __name__ == "__main__":
         local_save_dir = args.local_save_dir
 
     train_dataset.to_parquet(local_save_dir / "train.parquet")
+    val_dataset.to_parquet(local_save_dir / "val.parquet")
     test_dataset.to_parquet(local_save_dir / "test.parquet")
+    
 
     if hdfs_dir is not None:
         makedirs(hdfs_dir)
