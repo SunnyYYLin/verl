@@ -24,12 +24,15 @@ import torch
 import torch.distributed
 from tensordict import TensorDict
 from torch import nn
+from torch.distributed.device_mesh import DeviceMesh
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from transformers import GenerationConfig
 
 from verl import DataProto
+from verl.utils.config import omega_conf_to_dataclass
 from verl.utils.device import get_device_name, get_torch_device
 from verl.utils.torch_functional import get_response_mask
+from verl.workers.config import HFModelConfig, RolloutConfig
 
 from .base import BaseRollout
 
@@ -37,10 +40,18 @@ __all__ = ["HFRollout"]
 
 
 class HFRollout(BaseRollout):
-    def __init__(self, module: nn.Module, config):
-        super().__init__()
-        self.config = config
+    def __init__(self, module: nn.Module, config: RolloutConfig, model_config: HFModelConfig, device_mesh: DeviceMesh):
+        super().__init__(config, model_config, device_mesh)
         self.module = module
+
+    async def resume(self, tags: list[str]):
+        pass
+
+    async def update_weights(self, weights, **kwargs):
+        pass
+
+    async def release(self):
+        pass
 
     def generate_sequences(self, prompts: DataProto) -> DataProto:
         batch_size = prompts.batch.batch_size[0]

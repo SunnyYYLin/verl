@@ -16,7 +16,6 @@ Preprocess the GSM8k dataset to parquet format
 """
 
 import datasets
-from onnx_ir import val
 from verl.utils.hdfs_io import copy, makedirs
 
 # add a row to each data item that represents a unique id
