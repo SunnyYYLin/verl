@@ -3,15 +3,13 @@
 set -x
 
 EXPERIMENT_NAME="${target}-32k-bs${batch_size}_p${batch_size_per_gpu}-lr${learning_rate}-wd${weight_decay}-gpu${nproc_per_node}"
-DATASET_DIR=$DATASETS/verl/Gene-CRE
-MODEL_DIR=$MODELS/HybriDNA-300M-base
 SAVE_DIR=$MODELS/verl/HybriDNA-300M-Instruct-$EXPERIMENT_NAME
 MAX_PROMPT_LENGTH=$(( max_prompt_length_by_k * 1024 ))
 
 HYDRA_FULL_ERROR=1 torchrun --standalone --nnodes=1 --nproc_per_node=$nproc_per_node \
      -m verl.trainer.fsdp_sft_trainer \
-     data.train_files=$DATASET_DIR/train.parquet \
-     data.val_files=$DATASET_DIR/validation.parquet \
+     data.train_files=$dataset_dir/train.parquet \
+     data.val_files=$dataset_dir/validation.parquet \
      data.prompt_key=extra_info \
      data.response_key=extra_info \
      data.prompt_dict_keys=['gene_seq'] \

@@ -774,6 +774,9 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
             if self._is_actor:
                 optim_config = self.config.actor.optim
                 fsdp_config = omega_conf_to_dataclass(self.config.actor.fsdp_config)
+            elif self._is_rollout:
+                optim_config = None
+                fsdp_config = FSDPEngineConfig(model_dtype=self.config.rollout.dtype)
             else:
                 optim_config = None
                 fsdp_config = FSDPEngineConfig()
