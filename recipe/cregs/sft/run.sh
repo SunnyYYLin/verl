@@ -1,9 +1,20 @@
 #!/bin/bash
 
+# export target="train"
+# export nproc_per_node=1
+# export max_prompt_length_by_k=4
+# export learning_rate=1e-4
+# export weight_decay=1e-5
+# export batch_size=128
+# export batch_size_per_gpu=8
+# export dataset_dir=$DATASETS/verl/Gene-CRE
+# export model_dir=$MODELS/GENERator-v2-eukaryote-1.2b-base
+
 set -x
 
 EXPERIMENT_NAME="${target}-32k-bs${batch_size}_p${batch_size_per_gpu}-lr${learning_rate}-wd${weight_decay}-gpu${nproc_per_node}"
-SAVE_DIR=$MODELS/verl/HybriDNA-300M-Instruct-$EXPERIMENT_NAME
+MODEL_BASE=$(basename "$model_dir")
+SAVE_DIR=$MODELS/verl/$MODEL_BASE-$EXPERIMENT_NAME
 MAX_PROMPT_LENGTH=$(( max_prompt_length_by_k * 1024 ))
 
 HYDRA_FULL_ERROR=1 torchrun --standalone --nnodes=1 --nproc_per_node=$nproc_per_node \
@@ -29,7 +40,7 @@ HYDRA_FULL_ERROR=1 torchrun --standalone --nnodes=1 --nproc_per_node=$nproc_per_
      trainer.save_freq=50 \
      trainer.test_freq=50 \
      trainer.default_local_dir=$SAVE_DIR \
-     trainer.project_name=HybriDNA-300M-Instruct \
+     trainer.project_name=$MODEL_BASE \
      trainer.experiment_name=$EXPERIMENT_NAME \
      trainer.total_epochs=2 \
      trainer.resume_mode=auto \
