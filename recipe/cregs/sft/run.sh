@@ -9,7 +9,7 @@ MAX_PROMPT_LENGTH=$(( max_prompt_length_by_k * 1024 ))
 HYDRA_FULL_ERROR=1 torchrun --standalone --nnodes=1 --nproc_per_node=$nproc_per_node \
      -m verl.trainer.fsdp_sft_trainer \
      data.train_files=$dataset_dir/train.parquet \
-     data.val_files=$dataset_dir/validation.parquet \
+     data.val_files=$dataset_dir/val.parquet \
      data.prompt_key=extra_info \
      data.response_key=extra_info \
      data.prompt_dict_keys=['gene_seq'] \
@@ -18,7 +18,7 @@ HYDRA_FULL_ERROR=1 torchrun --standalone --nnodes=1 --nproc_per_node=$nproc_per_
      data.micro_batch_size_per_gpu=$batch_size_per_gpu \
      data.max_length=$MAX_PROMPT_LENGTH \
      data.truncation=right \
-     model.partial_pretrain=$MODEL_DIR \
+     model.partial_pretrain=$model_dir \
      model.trust_remote_code=true \
      model.fsdp_config.cpu_offload=false \
      model.fsdp_config.offload_params=false \
