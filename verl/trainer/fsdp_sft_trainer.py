@@ -214,8 +214,12 @@ class FSDPSFTTrainer:
         trust_remote_code = self.config.model.trust_remote_code
         torch_dtype = self.config.model.fsdp_config.get("model_dtype", "fp32")
         torch_dtype = PrecisionType.to_dtype(torch_dtype)
-        # load config first
+        # load config first (debug prints added)
+        print(f"[dbg] start AutoConfig.from_pretrained, local_model_path={local_model_path}, trust_remote_code={trust_remote_code}", flush=True)
+        t0 = time.time()
         config = AutoConfig.from_pretrained(local_model_path, trust_remote_code=trust_remote_code)
+        t1 = time.time()
+        print(f"[dbg] finished AutoConfig.from_pretrained (t={t1-t0:.2f}s)", flush=True)
         self.model_config = config
         if hasattr(self.model_config, "max_position_embeddings"):
             self.model_config.max_position_embeddings = max(
@@ -230,13 +234,31 @@ class FSDPSFTTrainer:
         )
 
         with init_context():
-            self.model: PreTrainedModel = AutoModelForCausalLM.from_pretrained(
-                local_model_path,
-                config=config,
-                torch_dtype=torch_dtype,
-                attn_implementation="flash_attention_2",
-                trust_remote_code=trust_remote_code,
-            )
+            # Debug prints around model.from_pretrained
+            print(f"[dbg] entering model.from_pretrained: task={self.config.model.get('task')}, torch_dtype={torch_dtype}, trust_remote_code={trust_remote_code}", flush=True)
+            t_model_load_start = time.time()
+            if self.config.model.get('task') == 'regression':
+                from transformers import AutoModelForSequenceClassification
+                print("[dbg] using AutoModelForSequenceClassification (num_labels=1)", flush=True)
+                self.model: PreTrainedModel = AutoModelForSequenceClassification.from_pretrained(
+                    local_model_path,
+                    config=config,
+                    num_labels=1,
+                    torch_dtype=torch_dtype,
+                    attn_implementation="flash_attention_2",
+                    trust_remote_code=trust_remote_code,
+                )
+            else:
+                print("[dbg] using AutoModelForCausalLM", flush=True)
+                self.model: PreTrainedModel = AutoModelForCausalLM.from_pretrained(
+                    local_model_path,
+                    config=config,
+                    torch_dtype=torch_dtype,
+                    attn_implementation="flash_attention_2",
+                    trust_remote_code=trust_remote_code,
+                )
+            t_model_load_end = time.time()
+            print(f"[dbg] finished model.from_pretrained (t={t_model_load_end - t_model_load_start:.2f}s)", flush=True)
 
             if self.use_remove_padding or self.config.ulysses_sequence_parallel_size > 1:
                 from verl.models.transformers.monkey_patch import apply_monkey_patch
@@ -264,11 +286,18 @@ class FSDPSFTTrainer:
                     peft_config = self.model.peft_config["default"]
                     # Ensure task_type is TaskType enum, not string
                     if isinstance(peft_config.task_type, str):
-                        peft_config.task_type = TaskType.CAUSAL_LM
+                        if self.config.model.get('task') == 'regression':
+                            peft_config.task_type = TaskType.SEQ_CLS
+                        else:
+                            peft_config.task_type = TaskType.CAUSAL_LM
                 else:
                     # Convert config to regular Python types before creating PEFT model
+                    if self.config.model.get('task') == 'regression':
+                        task_type = TaskType.SEQ_CLS
+                    else:
+                        task_type = TaskType.CAUSAL_LM
                     lora_config = {
-                        "task_type": TaskType.CAUSAL_LM,
+                        "task_type": task_type,
                         "r": self.config.model.lora_rank,
                         "lora_alpha": self.config.model.lora_alpha,
                         "target_modules": convert_to_regular_types(self.config.model.target_modules),
@@ -365,35 +394,48 @@ class FSDPSFTTrainer:
     def _compute_loss_and_backward(self, batch, do_backward=True, n_micro_batches=1):
         """Compute loss with optional sequence parallelism and remove padding features"""
         use_sp = self.use_remove_padding and self.config.ulysses_sequence_parallel_size > 1
+        is_regression = self.config.model.get('task') == 'regression'
 
         # Move inputs to GPU and prepare loss mask
         input_ids = batch["input_ids"].to(self.device_name)
         attention_mask = batch["attention_mask"].to(self.device_name)
         position_ids = batch["position_ids"].to(self.device_name)
-        loss_mask = batch.pop("loss_mask")[:, 1:].reshape(-1).to(self.device_name)
-        loss_fct = nn.CrossEntropyLoss(reduction="none")
+
+        if is_regression:
+            labels = batch.pop("labels").to(self.device_name)
+            loss_fct = nn.MSELoss(reduction="none")
+            loss_mask = batch.pop("loss_mask").to(self.device_name)
+        else:
+            loss_mask = batch.pop("loss_mask")[:, 1:].reshape(-1).to(self.device_name)
+            loss_fct = nn.CrossEntropyLoss(reduction="none")
 
         # Context manager for sequence parallel if needed
         context = self.sharding_manager if use_sp else nullcontext()
         with context, torch.autocast(device_type=self.device_name, dtype=torch.bfloat16):
             if not use_sp:
                 # Standard forward pass without sequence parallel
-                labels = input_ids[:, 1:].contiguous()
                 output = self.fsdp_model(
                     input_ids=input_ids, attention_mask=attention_mask, position_ids=position_ids, use_cache=False
                 )
                 logits = output.logits
 
-                shift_logits = logits[..., :-1, :].contiguous()
-                shift_labels = labels.contiguous()
-                # Flatten the tokens
-                shift_logits = shift_logits.view(-1, self.model.config.vocab_size)
-                shift_labels = shift_labels.view(-1)
-                # Enable model parallelism
-                shift_labels = shift_labels.to(shift_logits.device)
-                loss = loss_fct(shift_logits, shift_labels)
-                loss = loss * loss_mask.to(loss.device)
+                if is_regression:
+                    # AutoModelForSequenceClassification returns (batch_size, 1)
+                    loss = loss_fct(logits.squeeze(-1), labels)
+                else:
+                    labels = input_ids[:, 1:].contiguous()
+                    shift_logits = logits[..., :-1, :].contiguous()
+                    shift_labels = labels.contiguous()
+                    # Flatten the tokens
+                    shift_logits = shift_logits.view(-1, self.model.config.vocab_size)
+                    shift_labels = shift_labels.view(-1)
+                    # Enable model parallelism
+                    shift_labels = shift_labels.to(shift_logits.device)
+                    loss = loss_fct(shift_logits, shift_labels)
+                    loss = loss * loss_mask.to(loss.device)
             else:
+                if is_regression:
+                    raise NotImplementedError("Sequence parallelism is not supported for regression task yet.")
                 # IMPORTANT: We have a big assumption here, so we can shard the SAME sequence across SP ranks
                 # i.e., each GPU has <1 sequence, and each SP group has 1 sequence
                 # 1. All SP ranks will receive the *SAME* batch
@@ -447,7 +489,10 @@ class FSDPSFTTrainer:
                 loss_mask = loss_mask.to(full_loss.device)
                 loss = full_loss * loss_mask
 
-            valid_token_this_rank = torch.sum(loss_mask)
+            if is_regression:
+                valid_token_this_rank = torch.tensor(loss.numel(), dtype=torch.float32, device=loss.device)
+            else:
+                valid_token_this_rank = torch.sum(loss_mask)
 
             if self.config.data.balance_dp_token:
                 torch.distributed.all_reduce(valid_token_this_rank)

@@ -69,6 +69,7 @@ class SFTDataset(Dataset):
         self.response_dict_keys = response_dict_keys if response_dict_keys else []
 
         self.max_length = max_length
+        self.task = config.get('task', 'casual_lm')
 
         self._download()
         self._read_files_and_tokenize()
@@ -146,22 +147,28 @@ class SFTDataset(Dataset):
         prompt_chat_str = tokenizer.apply_chat_template(
             prompt_chat, add_generation_prompt=True, tokenize=False, **self.apply_chat_template_kwargs
         )
-        response_chat_str = response + tokenizer.eos_token
 
         # tokenize
         prompt_ids_output = tokenizer(prompt_chat_str, return_tensors="pt", add_special_tokens=False)
         prompt_ids = prompt_ids_output["input_ids"][0]
         prompt_attention_mask = prompt_ids_output["attention_mask"][0]
 
-        response_ids_output = tokenizer(response_chat_str, return_tensors="pt", add_special_tokens=False)
-        response_ids = response_ids_output["input_ids"][0]
-        response_attention_mask = response_ids_output["attention_mask"][0]
+        if self.task == 'regression':
+            input_ids = prompt_ids
+            attention_mask = prompt_attention_mask
+            response_length = 0
+            labels = torch.tensor(response, dtype=torch.float32)
+        else:
+            response_chat_str = response + tokenizer.eos_token
+            response_ids_output = tokenizer(response_chat_str, return_tensors="pt", add_special_tokens=False)
+            response_ids = response_ids_output["input_ids"][0]
+            response_attention_mask = response_ids_output["attention_mask"][0]
+
+            response_length = response_ids.shape[0]
+            input_ids = torch.cat((prompt_ids, response_ids), dim=-1)
+            attention_mask = torch.cat((prompt_attention_mask, response_attention_mask), dim=-1)
 
         prompt_length = prompt_ids.shape[0]
-        response_length = response_ids.shape[0]
-
-        input_ids = torch.cat((prompt_ids, response_ids), dim=-1)
-        attention_mask = torch.cat((prompt_attention_mask, response_attention_mask), dim=-1)
 
         # padding to max length
         sequence_length = input_ids.shape[0]
@@ -190,15 +197,21 @@ class SFTDataset(Dataset):
         position_ids = compute_position_id_with_mask(attention_mask)
 
         loss_mask = attention_mask.clone()
-        if prompt_length > 1:
-            # mask out prompt for SFT.
-            loss_mask[: min(prompt_length, loss_mask.size(0)) - 1] = 0
-        # mask out the last token in response
-        loss_mask[min(prompt_length + response_length, loss_mask.size(0)) - 1] = 0
+        if self.task == 'regression':
+            loss_mask[:] = 1.0  # For regression, we might not use loss_mask in the same way, but set it to 1
+        else:
+            if prompt_length > 1:
+                # mask out prompt for SFT.
+                loss_mask[: min(prompt_length, loss_mask.size(0)) - 1] = 0
+            # mask out the last token in response
+            loss_mask[min(prompt_length + response_length, loss_mask.size(0)) - 1] = 0
 
-        return {
-            "input_ids": input_ids,
-            "attention_mask": attention_mask,
-            "position_ids": position_ids,
-            "loss_mask": loss_mask,
+        res = {
+            'input_ids': input_ids,
+            'attention_mask': attention_mask,
+            'position_ids': position_ids,
+            'loss_mask': loss_mask,
         }
+        if self.task == 'regression':
+            res['labels'] = labels
+        return res
