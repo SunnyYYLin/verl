@@ -2,7 +2,7 @@
 
 # export target="train"
 # export nproc_per_node=1
-# export max_prompt_length_by_k=6
+# export max_prompt_length_by_k=4
 # export learning_rate=1e-4
 # export weight_decay=1e-1
 # export batch_size=512
@@ -12,7 +12,7 @@
 # export save_freq=50
 # export test_freq=50
 # export epochs=4
-# export dtype=bf16
+# export dtype=fp32
 
 set -x
 
@@ -21,7 +21,7 @@ MODEL_BASE=$(basename "$model_dir")
 SAVE_DIR=$MODELS/verl/$MODEL_BASE-$EXPERIMENT_NAME
 MAX_PROMPT_LENGTH=$(( max_prompt_length_by_k * 1024 ))
 
-HYDRA_FULL_ERROR=1 torchrun --standalone --nnodes=1 \
+torchrun --standalone --nnodes=1 \
      -m verl.trainer.fsdp_sft_trainer \
      data.train_files=$dataset_dir/train.parquet \
      data.val_files=$dataset_dir/val.parquet \
@@ -32,7 +32,7 @@ HYDRA_FULL_ERROR=1 torchrun --standalone --nnodes=1 \
      data.train_batch_size=$batch_size \
      data.micro_batch_size_per_gpu=$batch_size_per_gpu \
      data.max_length=$MAX_PROMPT_LENGTH \
-     data.truncation=error \
+     data.truncation=right \
      model.partial_pretrain=$model_dir \
      model.trust_remote_code=true \
      model.fsdp_config.model_dtype=$dtype \
