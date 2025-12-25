@@ -1,17 +1,17 @@
 #!/bin/bash
 
-export target="train"
-export nproc_per_node=1
-export max_prompt_length_by_k=4
-export learning_rate=1e-4
-export weight_decay=1e-5
-export batch_size=128
-export batch_size_per_gpu=8
-export dataset_dir=$DATASETS/verl/Gene-CRE
-export model_dir=$MODELS/GENERator-v2-eukaryote-1.2b-instruct
-export save_freq=50
-export test_freq=50
-export epochs=2
+# export target="train"
+# export nproc_per_node=1
+# export max_prompt_length_by_k=4
+# export learning_rate=5e-5
+# export weight_decay=1e-1
+# export batch_size=128
+# export batch_size_per_gpu=8
+# export dataset_dir=$DATASETS/verl/Gene-CRE
+# export model_dir=$MODELS/GENERator-v2-eukaryote-1.2b-instruct
+# export save_freq=50
+# export test_freq=50
+# export epochs=2
 
 set -x
 
