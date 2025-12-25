@@ -9,7 +9,7 @@ set -x
 # export pp=1
 # export dp=1
 # export dataset_dir=$DATASETS/verl/Gene-CRE
-# export model_dir=$MODELS/GENERator-v2-eukaryote-1.2b-base
+# export model_dir=$MODELS/GENERator-v2-eukaryote-1.2b-instruct
 
 data_path=$dataset_dir/test.parquet
 data_base=$(basename "$data_path")
