@@ -21,7 +21,7 @@ MODEL_BASE=$(basename "$model_dir")
 SAVE_DIR=$MODELS/verl/$MODEL_BASE-$EXPERIMENT_NAME
 MAX_PROMPT_LENGTH=$(( max_prompt_length_by_k * 1024 ))
 
-torchrun --standalone --nnodes=1 \
+torchrun --standalone --nnodes=1 --nproc_per_node=$nproc_per_node \
      -m verl.trainer.fsdp_sft_trainer \
      data.train_files=$dataset_dir/train.parquet \
      data.val_files=$dataset_dir/val.parquet \
