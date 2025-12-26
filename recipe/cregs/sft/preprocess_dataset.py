@@ -26,25 +26,28 @@ def make_map_fn(split):
         
         data = {
             "data_source": data_source,
-            "prompt": [
-                {
-                    "role": "user",
-                    "content": gene_seq,
-                }
-            ],
-            "ability": "math",
-            "reward_model": {"style": "rule", "ground_truth": cre_seq},
+            "question": gene_seq,
+            "answer": cre_seq,
             "extra_info": {
                 "split": split,
                 "index": idx,
-                "gene_seq": gene_seq,
-                "cre_seq": cre_seq,
                 "cell_type": example.pop("cell_type"),
             },
         }
         return data
 
     return process_fn
+
+def phase_dataset(dataset: datasets.Dataset):
+    dataset = dataset.repeat(36)
+    def phasing(record: dict, idx: int):
+        gene_phase = idx % 6
+        cre_phase = (idx // 6) % 6
+        record['question'] = record['question'][:-gene_phase]
+        record['answer'] = record['answer'][:-cre_phase]
+        return record
+    dataset = dataset.map(phasing, with_indices=True)
+    return dataset
 
 if __name__ == "__main__":
     from argparse import ArgumentParser
@@ -57,6 +60,7 @@ if __name__ == "__main__":
     parser.add_argument("--local_dataset_path", type=Path, 
                         default=None, 
                         help="The local path to the raw dataset, if it exists.")
+    parser.add_argument("--phasing" , action="store_true", help="Whether to use phasing to augment the dataset.")
     parser.add_argument(
         "--local_save_dir", type=Path, 
         default=Path(getenv("DATASETS", ""))/'verl'/'Gene-CRE', 
@@ -65,6 +69,12 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     local_dataset_path = args.local_dataset_path
+    hdfs_dir = args.hdfs_dir
+    local_save_dir = args.local_dir
+    if local_save_dir is not None:
+        print("Warning: Argument 'local_dir' is deprecated. Please use 'local_save_dir' instead.")
+    else:
+        local_save_dir = args.local_save_dir
 
     data_source = "SunnyLin/Gene-CRE"
 
@@ -73,28 +83,16 @@ if __name__ == "__main__":
     else:
         # Force redownload / avoid using cached dataset files
         dataset = datasets.load_dataset(data_source, "default")
+    assert isinstance(dataset, datasets.DatasetDict), f"Expected a DatasetDict but got {type(dataset)}:\n{dataset}"
 
-    train_dataset = dataset["train"]
-    val_dataset = dataset["validation"]
-    test_dataset = dataset["test"]
-
-    train_dataset = train_dataset.map(function=make_map_fn("train"), with_indices=True)
-    val_dataset = val_dataset.map(function=make_map_fn("validation"), with_indices=True)
-    test_dataset = test_dataset.map(function=make_map_fn("test"), with_indices=True)
-
-    hdfs_dir = args.hdfs_dir
-    local_save_dir = args.local_dir
-    if local_save_dir is not None:
-        print("Warning: Argument 'local_dir' is deprecated. Please use 'local_save_dir' instead.")
-    else:
-        local_save_dir = args.local_save_dir
-
-    train_dataset.to_parquet(local_save_dir / "train.parquet")
-    val_dataset.to_parquet(local_save_dir / "val.parquet")
-    test_dataset.to_parquet(local_save_dir / "test.parquet")
+    for name, split in dataset.items():
+        print(f"{name} dataset length: {len(split)}")
+        split = split.map(function=make_map_fn(name), with_indices=True)
+        if args.phasing:
+            split = phase_dataset(split)
+        split.to_parquet(local_save_dir / f'{name}.parquet')
     
 
     if hdfs_dir is not None:
         makedirs(hdfs_dir)
-
         copy(src=local_save_dir, dst=hdfs_dir)
