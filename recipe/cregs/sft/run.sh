@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # export target="train"
-# export nproc_per_node=1
+# export nproc_per_node=2
 # export max_prompt_length_by_k=4
 # export learning_rate=1e-4
 # export weight_decay=1e-1
@@ -14,7 +14,8 @@
 # export save_freq=50
 # export test_freq=50
 # export epochs=4
-# export dtype=fp32
+# export dtype=bf16
+# export OMP_NUM_THREADS=28
 
 set -x
 

@@ -52,7 +52,4 @@ if [ $USE_MEGATRON -eq 1 ]; then
     uv pip install nvidia-cudnn-cu12==9.10.2.21
 fi
 
-echo "7. Mamba related packages"
-MAX_JOBS=16 uv pip install mamba-ssm causal_conv1d
-
 echo "Successfully installed all packages"
