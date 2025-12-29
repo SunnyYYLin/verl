@@ -19,7 +19,7 @@
 
 set -x
 
-EXPERIMENT_NAME="${target}-${max_prompt_length_by_k}k-bs${batch_size}_p${batch_size_per_gpu}-lr${learning_rate}-wd${weight_decay}-gpu${nproc_per_node}"
+EXPERIMENT_NAME="${target}-${max_prompt_length_by_k}k-bs${batch_size}_p${batch_size_per_gpu}-lr${learning_rate}-wd${weight_decay}-${nproc_per_node}gpu"
 if [ "$lora_rank" != "0" ]; then
      EXPERIMENT_NAME="${EXPERIMENT_NAME}-lora${lora_rank}_${lora_alpha}"
 fi
