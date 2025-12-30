@@ -15,8 +15,10 @@
 import json
 import logging
 import os
+import shutil
 import warnings
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Optional
 
 import torch
@@ -293,6 +295,12 @@ class FSDPCheckpointManager(BaseCheckpointManager):
             # loaded from the Hub.
             if hasattr(model_config, "auto_map"):
                 custom_object_save(unwrap_model, hf_config_tokenizer_path, config=model_config)
+
+            # Copy all .py files from the original model directory if available
+            source_path = getattr(model_config, "_name_or_path", None)
+            if source_path and Path(source_path).is_dir():
+                for py_file in Path(source_path).glob("*.py"):
+                    shutil.copy(py_file, hf_config_tokenizer_path)
 
             # Also save runtime FSDP config
             fsdp_config_path = os.path.join(local_path, "fsdp_config.json")

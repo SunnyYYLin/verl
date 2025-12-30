@@ -39,6 +39,7 @@ https://verl.readthedocs.io/en/latest/advance/checkpoint.html#convert-fsdp-and-m
 import argparse
 import os
 import re
+import shutil
 import warnings
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
@@ -246,6 +247,12 @@ class BaseModelMerger(ABC):
         if tokenizer is not None:
             print(f"Saving tokenizer to {self.config.target_dir}")
             tokenizer.save_pretrained(self.config.target_dir)
+
+        # Copy all .py files from the source config directory to the target directory
+        if os.path.isdir(self.hf_model_config_path):
+            for filename in os.listdir(self.hf_model_config_path):
+                if filename.endswith(".py"):
+                    shutil.copy(os.path.join(self.hf_model_config_path, filename), self.config.target_dir)
 
     def upload_to_huggingface(self):
         from huggingface_hub import HfApi

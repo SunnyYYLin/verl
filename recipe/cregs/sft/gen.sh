@@ -1,5 +1,6 @@
 set -x
 
+# export target="offline-debug"
 # export nproc_per_node=1
 # export max_prompt_length_by_k=4
 # export response_length_by_k=4
@@ -9,7 +10,7 @@ set -x
 # export pp=1
 # export dp=1
 # export dataset_dir=$DATASETS/verl/Gene-CRE
-# export model_dir=$MODELS/GENERator-v2-eukaryote-1.2b-instruct
+# export model_dir=$MODELS/HybriDNA-300M-instruct
 
 data_path=$dataset_dir/test.parquet
 data_base=$(basename "$data_path")
@@ -21,7 +22,14 @@ timestamp=$(date +%Y%m%d_%H%M%S)
 save_dir=${DATASETS}/verl/results
 save_path="${save_dir}/${data_name}-${model_name}-${timestamp}.parquet"
 
-HYDRA_FULL_ERROR=1 python3 -m verl.trainer.main_generation \
+if [[ "$target" == *debug* ]]; then
+     EXTRA_ENV='CUDA_LAUNCH_BLOCKING=1 NCCL_DEBUG=INFO PYTHONFAULTHANDLER=1 TORCH_DISTRIBUTED_DEBUG=DETAIL PYTHONUNBUFFERED=1 VERL_SFT_LOGGING_LEVEL=DEBUG TRANSFORMERS_VERBOSITY=debug HYDRA_FULL_ERROR=1'
+else
+     EXTRA_ENV=''
+fi
+export $EXTRA_ENV
+
+python3 -m verl.trainer.main_generation \
     trainer.nnodes=1 \
     trainer.n_gpus_per_node=$nproc_per_node \
     data.path=$data_path \

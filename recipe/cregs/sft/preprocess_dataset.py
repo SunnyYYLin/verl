@@ -26,6 +26,10 @@ def make_map_fn(split):
         
         data = {
             "data_source": data_source,
+            "prompt": [{
+                "role": "user",
+                "content": gene_seq
+            }],
             "question": gene_seq,
             "answer": cre_seq,
             "extra_info": {
