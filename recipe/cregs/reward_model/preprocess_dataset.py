@@ -16,15 +16,14 @@ Preprocess the GSM8k dataset to parquet format
 """
 
 import datasets
-from verl.utils.hdfs_io import copy, makedirs
-from random import random
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, PreTrainedTokenizer, PreTrainedTokenizerFast
 
-tokenizer = AutoTokenizer.from_pretrained("/home/dataset-assist-0/models/GENERator-v2-eukaryote-1.2b-instruct", trust_remote_code=True)
+from verl.utils import dataset
+
 
 # add a row to each data item that represents a unique id
-def make_map_fn(split):
-    def process_fn(example, idx):
+def make_map_fn(split: str, tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast, data_source: str):
+    def process_fn(example: dict[str, str|float], idx: int):
         gene_seq = example.pop("gene_seq")
         cre_seq = example.pop("cre_seq")
         messages = [
@@ -39,8 +38,8 @@ def make_map_fn(split):
             "extra_info": {
                 "split": split,
                 "index": idx,
-                "activity": random(),
-                "cell_type": example.pop("cell_type"),
+                "abc_score": example.pop('abc_score'),
+                "activity": example.pop('activity'),
             },
         }
         return data
@@ -48,55 +47,52 @@ def make_map_fn(split):
     return process_fn
 
 if __name__ == "__main__":
-    from argparse import ArgumentParser
+    from os import cpu_count, getenv
     from pathlib import Path
-    from os import getenv
+    from typing import Optional
 
-    parser = ArgumentParser()
-    parser.add_argument("--local_dir", default=None, help="The save directory for the preprocessed dataset.")
-    parser.add_argument("--hdfs_dir", default=None)
-    parser.add_argument("--local_dataset_path", type=Path, 
-                        default=None, 
-                        help="The local path to the raw dataset, if it exists.")
-    parser.add_argument(
-        "--local_save_dir", type=Path, 
-        default=Path(getenv("DATASETS", ""))/'verl'/'ABC-dummy', 
-        help="The save directory for the preprocessed dataset."
-    )
-
-    args = parser.parse_args()
-    local_dataset_path = args.local_dataset_path
-
-    data_source = "SunnyLin/Gene-CRE"
-
-    if local_dataset_path is not None:
-        dataset = datasets.load_dataset(local_dataset_path, "default")
-    else:
-        # Force redownload / avoid using cached dataset files
-        dataset = datasets.load_dataset(data_source, "default")
-
-    train_dataset = dataset["train"].select(range(1000))
-    val_dataset = dataset["validation"].select(range(100))
-    test_dataset = dataset["test"].select(range(100))
-
-    train_dataset = train_dataset.map(function=make_map_fn("train"), with_indices=True)
-    val_dataset = val_dataset.map(function=make_map_fn("validation"), with_indices=True)
-    test_dataset = test_dataset.map(function=make_map_fn("test"), with_indices=True)
-    print(train_dataset[0])
-
-    hdfs_dir = args.hdfs_dir
-    local_save_dir = args.local_dir
-    if local_save_dir is not None:
-        print("Warning: Argument 'local_dir' is deprecated. Please use 'local_save_dir' instead.")
-    else:
-        local_save_dir = args.local_save_dir
-
-    train_dataset.to_parquet(local_save_dir / "train.parquet")
-    val_dataset.to_parquet(local_save_dir / "val.parquet")
-    test_dataset.to_parquet(local_save_dir / "test.parquet")
+    from tap import Tap
     
 
-    if hdfs_dir is not None:
-        makedirs(hdfs_dir)
+    # parser = ArgumentParser()
+    # parser.add_argument(
+    #     "--dataset_dir", type=Path, required=True,
+    #     help="The dataset directory."
+    # )
+    # parser.add_argument(
+    #     "--save_dir", type=Path, 
+    #     default=None, 
+    #     help="The save directory for the preprocessed dataset."
+    # )
+    # parser.add_argument('--tokenizer_dir', type=Path, required=True, help='Path to the tokenizer directory.')
+    # args = parser.parse_args()
 
-        copy(src=local_save_dir, dst=hdfs_dir)
+    class Args(Tap):
+        dataset_dir: Path
+        save_dir: Optional[Path] = None
+        tokenizer_dir: Path
+    args = Args().parse_args()
+    if not args.save_dir:
+        args.save_dir = Path(getenv('DATASETS', '')) / 'verl' / f'{args.dataset_dir.name}-{args.tokenizer_dir.name}'
+        print(f"No save_dir specified. Using default: {args.save_dir}")
+
+    tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_dir, trust_remote_code=True, use_fast=True)
+
+    dataset = datasets.load_dataset(str(args.dataset_dir))
+
+    for name, split in dataset.items():
+        assert isinstance(name, str), f"Expected split name to be a string, but got {type(name)}"
+        print(f"Before processing: {split[0]}")
+        split = split.map(
+            make_map_fn(
+                split=name,
+                tokenizer=tokenizer,
+                data_source=args.dataset_dir.name,
+            ),
+            remove_columns=split.column_names,
+            with_indices=True,
+            num_proc=max(1, (cpu_count() or 1)//2),
+        )
+        print(f"After processing: {split[0]}")
+        args.save_dir.mkdir(parents=True, exist_ok=True)
+        split.to_parquet(args.save_dir / f'{name}.parquet')

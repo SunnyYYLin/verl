@@ -2,24 +2,25 @@
 
 # export target="offline-debug"
 # export nproc_per_node=1
-# export max_prompt_length_by_k=6
+# export max_prompt_length_by_k=32
 # export learning_rate=1e-4
 # export weight_decay=1e-1
-# export batch_size=64
-# export batch_size_per_gpu=16
-# export dataset_dir=$DATASETS/verl/ABC-dummy
+# export batch_size=256
+# export batch_size_per_gpu=8
+# export dataset_dir=$DATASETS/verl/ABC-K562-HybriDNA-300M-instruct
 # export model_dir=$MODELS/HybriDNA-300M-instruct
-# export save_freq=5
-# export test_freq=5
-# export epochs=4
-# export dtype=fp32
+# export save_freq=100
+# export test_freq=100
+# export epochs=1
+# export dtype=bf16
 # export OMP_NUM_THREADS=28
 
 set -x
 
+SUBDATASET=$(basename "$dataset_dir")
 EXPERIMENT_NAME="${target}-${max_prompt_length_by_k}k-bs${batch_size}_p${batch_size_per_gpu}-lr${learning_rate}-wd${weight_decay}-${nproc_per_node}gpu"
 MODEL_BASE=$(basename "$model_dir")
-SAVE_DIR=$MODELS/verl/$MODEL_BASE-$EXPERIMENT_NAME
+SAVE_DIR=$MODELS/verl/$SUBDATASET-$EXPERIMENT_NAME
 MAX_PROMPT_LENGTH=$(( max_prompt_length_by_k * 1024 ))
 
 if [ "$target" = "offline" ]; then
@@ -41,7 +42,7 @@ torchrun --standalone --nnodes=1 --nproc_per_node=$nproc_per_node \
      data.val_files=$dataset_dir/val.parquet \
      data.prompt_key=prompt \
      data.response_key=extra_info \
-     +data.response_dict_keys=['activity'] \
+     +data.response_dict_keys=['abc_score'] \
      data.train_batch_size=$batch_size \
      data.micro_batch_size_per_gpu=$batch_size_per_gpu \
      data.max_length=$MAX_PROMPT_LENGTH \
@@ -60,7 +61,7 @@ torchrun --standalone --nnodes=1 --nproc_per_node=$nproc_per_node \
      trainer.save_freq=$save_freq \
      trainer.test_freq=$test_freq \
      trainer.default_local_dir=$SAVE_DIR \
-     trainer.project_name=$MODEL_BASE \
+     trainer.project_name=$SUBDATASET \
      trainer.experiment_name=$EXPERIMENT_NAME \
      trainer.total_epochs=$epochs \
      trainer.resume_mode=auto \

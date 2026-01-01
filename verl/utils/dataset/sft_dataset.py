@@ -140,25 +140,27 @@ class SFTDataset(Dataset):
         prompt = self.prompts[item]
         response = self.responses[item]
 
-        # apply chat template
-        prompt_chat = [{"role": "user", "content": prompt}]
-
-        # string
-        prompt_chat_str = tokenizer.apply_chat_template(
-            prompt_chat, add_generation_prompt=True, tokenize=False, **self.apply_chat_template_kwargs
-        )
-
-        # tokenize
-        prompt_ids_output = tokenizer(prompt_chat_str, return_tensors="pt", add_special_tokens=False)
-        prompt_ids = prompt_ids_output["input_ids"][0]
-        prompt_attention_mask = prompt_ids_output["attention_mask"][0]
-
         if self.task == 'regression':
-            input_ids = prompt_ids
-            attention_mask = prompt_attention_mask
+            prompt_ids_output = tokenizer(prompt, return_tensors="pt", add_special_tokens=False)
+            input_ids = prompt_ids_output["input_ids"][0]
+            attention_mask = prompt_ids_output["attention_mask"][0]
             response_length = 0
             labels = torch.tensor(response, dtype=torch.float32)
         else:
+
+            # apply chat template
+            prompt_chat = [{"role": "user", "content": prompt}]
+
+            # string
+            prompt_chat_str = tokenizer.apply_chat_template(
+                prompt_chat, add_generation_prompt=True, tokenize=False, **self.apply_chat_template_kwargs
+            )
+
+            # tokenize
+            prompt_ids_output = tokenizer(prompt_chat_str, return_tensors="pt", add_special_tokens=False)
+            prompt_ids = prompt_ids_output["input_ids"][0]
+            prompt_attention_mask = prompt_ids_output["attention_mask"][0]
+
             response_chat_str = response + tokenizer.eos_token
             response_ids_output = tokenizer(response_chat_str, return_tensors="pt", add_special_tokens=False)
             response_ids = response_ids_output["input_ids"][0]
