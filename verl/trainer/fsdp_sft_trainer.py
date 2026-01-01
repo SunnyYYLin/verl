@@ -403,7 +403,7 @@ class FSDPSFTTrainer:
 
         if is_regression:
             labels = batch.pop("labels").to(self.device_name)
-            loss_fct = nn.MSELoss(reduction="none")
+            loss_fct = nn.MSELoss(reduction="none") # TODO: consider other regression losses
             loss_mask = batch.pop("loss_mask").to(self.device_name)
         else:
             loss_mask = batch.pop("loss_mask")[:, 1:].reshape(-1).to(self.device_name)

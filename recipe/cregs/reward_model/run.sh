@@ -7,7 +7,7 @@
 # export weight_decay=1e-1
 # export batch_size=256
 # export batch_size_per_gpu=8
-# export dataset_dir=$DATASETS/verl/ABC-K562-HybriDNA-300M-instruct
+# export dataset_dir=$DATASETS/verl/ABC-K562
 # export model_dir=$MODELS/HybriDNA-300M-instruct
 # export save_freq=100
 # export test_freq=100
@@ -40,9 +40,9 @@ torchrun --standalone --nnodes=1 --nproc_per_node=$nproc_per_node \
      -m verl.trainer.fsdp_sft_trainer \
      data.train_files=$dataset_dir/train.parquet \
      data.val_files=$dataset_dir/val.parquet \
-     data.prompt_key=prompt \
-     data.response_key=extra_info \
-     +data.response_dict_keys=['abc_score'] \
+     data.prompt_key=question \
+     data.response_key=answer \
+     +data.score_key=abc_score \
      data.train_batch_size=$batch_size \
      data.micro_batch_size_per_gpu=$batch_size_per_gpu \
      data.max_length=$MAX_PROMPT_LENGTH \

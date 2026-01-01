@@ -70,6 +70,8 @@ class SFTDataset(Dataset):
 
         self.max_length = max_length
         self.task = config.get('task', 'casual_lm')
+        if self.task == 'regression':
+            self.score_key = config.get('score_key', 'score')
 
         self._download()
         self._read_files_and_tokenize()
@@ -131,6 +133,9 @@ class SFTDataset(Dataset):
             self.responses = self.responses.squeeze()
         self.responses = self.responses.tolist()
 
+        if self.task == 'regression':
+            self.scores = self.dataframe[self.score_key]
+
     def __len__(self):
         return len(self.prompts)
 
@@ -141,14 +146,15 @@ class SFTDataset(Dataset):
         response = self.responses[item]
 
         if self.task == 'regression':
-            prompt_ids_output = tokenizer(prompt, return_tensors="pt", add_special_tokens=False)
-            input_ids = prompt_ids_output["input_ids"][0]
-            attention_mask = prompt_ids_output["attention_mask"][0]
-            prompt_length = input_ids.shape[0]
-            response_length = 0
-            labels = torch.tensor(response, dtype=torch.float32)
+            chat = [{"role": "user", "content": prompt}, {"role": "assistant", "content": response}]
+            chat_str = tokenizer.apply_chat_template(
+                chat, tokenize=False, **self.apply_chat_template_kwargs
+            )
+            input_ids_output = tokenizer(chat_str, return_tensors="pt", add_special_tokens=False)
+            input_ids = input_ids_output["input_ids"][0]
+            attention_mask = input_ids_output["attention_mask"][0]
+            labels = torch.tensor(self.scores.iloc[item], dtype=torch.float)
         else:
-
             # apply chat template
             prompt_chat = [{"role": "user", "content": prompt}]
 

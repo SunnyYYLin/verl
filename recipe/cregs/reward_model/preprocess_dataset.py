@@ -16,29 +16,25 @@ Preprocess the GSM8k dataset to parquet format
 """
 
 import datasets
-from transformers import AutoTokenizer, PreTrainedTokenizer, PreTrainedTokenizerFast
 
 from verl.utils import dataset
 
 
 # add a row to each data item that represents a unique id
-def make_map_fn(split: str, tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast, data_source: str):
+def make_map_fn(split: str, data_source: str):
     def process_fn(example: dict[str, str|float], idx: int):
         gene_seq = example.pop("gene_seq")
         cre_seq = example.pop("cre_seq")
-        messages = [
-            {'role': 'user', 'content': gene_seq},
-            {'role': 'assistant', 'content': cre_seq}
-        ]
-        prompt = tokenizer.apply_chat_template(messages, tokenize=False)
         
         data = {
             "data_source": data_source,
-            "prompt": prompt,
+            "prompt": [{'role': 'user', 'content': gene_seq}],
+            "question": gene_seq,
+            "answer": cre_seq,
+            "abc_score": example.pop('abc_score'),
             "extra_info": {
                 "split": split,
                 "index": idx,
-                "abc_score": example.pop('abc_score'),
                 "activity": example.pop('activity'),
             },
         }
@@ -71,14 +67,11 @@ if __name__ == "__main__":
     class Args(Tap):
         dataset_dir: Path
         save_dir: Optional[Path] = None
-        tokenizer_dir: Path
         sample_ratio: float = 1.0
     args = Args().parse_args()
     if not args.save_dir:
-        args.save_dir = Path(getenv('DATASETS', '')) / 'verl' / f'{args.dataset_dir.name}-{args.tokenizer_dir.name}'
+        args.save_dir = Path(getenv('DATASETS', '')) / 'verl' / f'{args.dataset_dir.name}'
         print(f"No save_dir specified. Using default: {args.save_dir}")
-
-    tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_dir, trust_remote_code=True, use_fast=True)
 
     dataset = datasets.load_dataset(str(args.dataset_dir))
 
@@ -90,7 +83,6 @@ if __name__ == "__main__":
         split = split.map(
             make_map_fn(
                 split=name,
-                tokenizer=tokenizer,
                 data_source=args.dataset_dir.name,
             ),
             remove_columns=split.column_names,
