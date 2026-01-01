@@ -23,7 +23,7 @@ MODEL_BASE=$(basename "$model_dir")
 SAVE_DIR=$MODELS/verl/$SUBDATASET-$EXPERIMENT_NAME
 MAX_PROMPT_LENGTH=$(( max_prompt_length_by_k * 1024 ))
 
-if [ "$target" = "offline" ]; then
+if [[ "$target" == *offline* ]]; then
      logger='["console"]'
 else
      logger='["console","swanlab"]'

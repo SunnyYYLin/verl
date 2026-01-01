@@ -49,6 +49,7 @@ def make_map_fn(split: str, tokenizer: PreTrainedTokenizer | PreTrainedTokenizer
 if __name__ == "__main__":
     from os import cpu_count, getenv
     from pathlib import Path
+    from random import sample
     from typing import Optional
 
     from tap import Tap
@@ -71,6 +72,7 @@ if __name__ == "__main__":
         dataset_dir: Path
         save_dir: Optional[Path] = None
         tokenizer_dir: Path
+        sample_ratio: float = 1.0
     args = Args().parse_args()
     if not args.save_dir:
         args.save_dir = Path(getenv('DATASETS', '')) / 'verl' / f'{args.dataset_dir.name}-{args.tokenizer_dir.name}'
@@ -83,6 +85,8 @@ if __name__ == "__main__":
     for name, split in dataset.items():
         assert isinstance(name, str), f"Expected split name to be a string, but got {type(name)}"
         print(f"Before processing: {split[0]}")
+        split_size = len(split)
+        split = split.select(sample(range(split_size), k=int(split_size * args.sample_ratio)))
         split = split.map(
             make_map_fn(
                 split=name,

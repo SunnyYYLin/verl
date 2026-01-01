@@ -144,6 +144,7 @@ class SFTDataset(Dataset):
             prompt_ids_output = tokenizer(prompt, return_tensors="pt", add_special_tokens=False)
             input_ids = prompt_ids_output["input_ids"][0]
             attention_mask = prompt_ids_output["attention_mask"][0]
+            prompt_length = input_ids.shape[0]
             response_length = 0
             labels = torch.tensor(response, dtype=torch.float32)
         else:
@@ -170,7 +171,7 @@ class SFTDataset(Dataset):
             input_ids = torch.cat((prompt_ids, response_ids), dim=-1)
             attention_mask = torch.cat((prompt_attention_mask, response_attention_mask), dim=-1)
 
-        prompt_length = prompt_ids.shape[0]
+            prompt_length = prompt_ids.shape[0]
 
         # padding to max length
         sequence_length = input_ids.shape[0]
