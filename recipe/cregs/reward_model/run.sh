@@ -2,13 +2,15 @@
 
 # export target="offline-debug"
 # export nproc_per_node=1
-# export max_prompt_length_by_k=32
+# export max_prompt_length_by_k=64
 # export learning_rate=1e-4
 # export weight_decay=1e-1
-# export batch_size=256
-# export batch_size_per_gpu=8
+# export batch_size=8
+# export batch_size_per_gpu=4
 # export dataset_dir=$DATASETS/verl/ABC-K562
-# export model_dir=$MODELS/HybriDNA-300M-instruct
+# export model_dir=$MODELS/verl/HybriDNA-300M-instruct-train-24k-bs128_p8-lr1e-4-wd1e-2-2gpu/global_step_500-hf
+# export lora_rank=8
+# export lora_alpha=16
 # export save_freq=100
 # export test_freq=100
 # export epochs=1
@@ -19,6 +21,10 @@ set -x
 
 SUBDATASET=$(basename "$dataset_dir")
 EXPERIMENT_NAME="${target}-${max_prompt_length_by_k}k-bs${batch_size}_p${batch_size_per_gpu}-lr${learning_rate}-wd${weight_decay}-${nproc_per_node}gpu"
+if [ "$lora_rank" != "0" ]; then
+     EXPERIMENT_NAME="${EXPERIMENT_NAME}-lora${lora_rank}_${lora_alpha}"
+fi
+
 MODEL_BASE=$(basename "$model_dir")
 SAVE_DIR=$MODELS/verl/$SUBDATASET-$EXPERIMENT_NAME
 MAX_PROMPT_LENGTH=$(( max_prompt_length_by_k * 1024 ))
