@@ -1,15 +1,15 @@
 #!/bin/bash
 
-# export target="offline-debug"
+# export target="debug"
 # export nproc_per_node=1
 # export max_prompt_length_by_k=64
 # export learning_rate=1e-4
 # export weight_decay=1e-1
-# export batch_size=8
+# export batch_size=64
 # export batch_size_per_gpu=4
-# export dataset_dir=$DATASETS/verl/ABC-K562
+# export dataset_dir=$DATASETS/verl/ABC-K562-dummy
 # export model_dir=$MODELS/verl/HybriDNA-300M-instruct-train-24k-bs128_p8-lr1e-4-wd1e-2-2gpu/global_step_500-hf
-# export lora_rank=8
+# export lora_rank=0
 # export lora_alpha=16
 # export save_freq=100
 # export test_freq=100
@@ -59,7 +59,7 @@ torchrun --standalone --nnodes=1 --nproc_per_node=$nproc_per_node \
      model.fsdp_config.model_dtype=$dtype \
      model.fsdp_config.cpu_offload=false \
      model.fsdp_config.offload_params=false \
-     model.use_liger=true \
+     model.use_liger=false \
      model.enable_gradient_checkpointing=true \
      optim.lr=$learning_rate \
      optim.weight_decay=$weight_decay \

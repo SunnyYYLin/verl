@@ -2,15 +2,15 @@ set -x
 
 # export target="offline-debug"
 # export nproc_per_node=1
-# export max_prompt_length_by_k=4
-# export response_length_by_k=4
-# export batch_size=8
+# export max_prompt_length_by_k=24
+# export response_length_by_k=1
+# export batch_size=1
 # export temperature=0.01
 # export tp=1
 # export pp=1
 # export dp=1
-# export dataset_dir=$DATASETS/verl/Gene-CRE
-# export model_dir=$MODELS/HybriDNA-300M-instruct
+# export dataset_dir=$VERL_DATASETS/Gene-CRE
+# export model_dir=$VERL_MODELS/HybriDNA-300M-instruct-train-24k-bs128_p8-lr1e-4-wd1e-2-2gpu/global_step_500-hf
 
 data_path=$dataset_dir/test.parquet
 data_base=$(basename "$data_path")
