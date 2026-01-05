@@ -49,20 +49,6 @@ if __name__ == "__main__":
     from typing import Optional
 
     from tap import Tap
-    
-
-    # parser = ArgumentParser()
-    # parser.add_argument(
-    #     "--dataset_dir", type=Path, required=True,
-    #     help="The dataset directory."
-    # )
-    # parser.add_argument(
-    #     "--save_dir", type=Path, 
-    #     default=None, 
-    #     help="The save directory for the preprocessed dataset."
-    # )
-    # parser.add_argument('--tokenizer_dir', type=Path, required=True, help='Path to the tokenizer directory.')
-    # args = parser.parse_args()
 
     class Args(Tap):
         dataset_dir: Path

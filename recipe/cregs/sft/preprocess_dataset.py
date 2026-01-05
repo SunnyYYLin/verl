@@ -15,27 +15,30 @@
 Preprocess the GSM8k dataset to parquet format
 """
 
+import logging
+
 import datasets
-from verl.utils.hdfs_io import copy, makedirs
+from datasets import Dataset, NamedSplit
+
 
 # add a row to each data item that represents a unique id
-def make_map_fn(split):
+def make_map_fn(split: Dataset, data_source: str|NamedSplit):
     def process_fn(example, idx):
-        gene_seq = example.pop("gene_seq")
-        cre_seq = example.pop("cre_seq")
-        
+        gene_seq = example.pop('gene_seq')
+        cre_seq = example.pop('cre_seq')
+
         data = {
-            "data_source": data_source,
-            "prompt": [{
-                "role": "user",
-                "content": gene_seq
+            'data_source': data_source,
+            'prompt': [{
+                'role': 'user',
+                'content': gene_seq
             }],
-            "question": gene_seq,
-            "answer": cre_seq,
-            "extra_info": {
-                "split": split,
-                "index": idx,
-                "cell_type": example.pop("cell_type"),
+            'question': gene_seq,
+            'answer': cre_seq,
+            'extra_info': {
+                'split': data_source,
+                'index': idx,
+                'cell_type': example.pop('cell_type'),
             },
         }
         return data
@@ -43,7 +46,7 @@ def make_map_fn(split):
     return process_fn
 
 def phase_dataset(dataset: datasets.Dataset):
-    dataset = dataset.repeat(36)
+    dataset = datasets.concatenate_datasets([dataset] * 36)
     def phasing(record: dict, idx: int):
         gene_phase = idx % 6
         cre_phase = (idx // 6) % 6
@@ -54,49 +57,40 @@ def phase_dataset(dataset: datasets.Dataset):
     return dataset
 
 if __name__ == "__main__":
-    from argparse import ArgumentParser
-    from pathlib import Path
     from os import getenv
+    from pathlib import Path
+    from random import sample
+    from typing import Optional
 
-    parser = ArgumentParser()
-    parser.add_argument("--local_dir", default=None, help="The save directory for the preprocessed dataset.")
-    parser.add_argument("--hdfs_dir", default=None)
-    parser.add_argument("--local_dataset_path", type=Path, 
-                        default=None, 
-                        help="The local path to the raw dataset, if it exists.")
-    parser.add_argument("--phasing" , action="store_true", help="Whether to use phasing to augment the dataset.")
-    parser.add_argument(
-        "--local_save_dir", type=Path, 
-        default=Path(getenv("DATASETS", ""))/'verl'/'Gene-CRE', 
-        help="The save directory for the preprocessed dataset."
-    )
+    from tap import Tap
 
-    args = parser.parse_args()
-    local_dataset_path = args.local_dataset_path
-    hdfs_dir = args.hdfs_dir
-    local_save_dir = args.local_dir
-    if local_save_dir is not None:
-        print("Warning: Argument 'local_dir' is deprecated. Please use 'local_save_dir' instead.")
-    else:
-        local_save_dir = args.local_save_dir
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
 
-    data_source = "SunnyLin/Gene-CRE"
+    class Args(Tap):
+        dataset_dir: Path
+        save_dir: Optional[Path] = None
+        sample_ratio: float = 1.0
+        phasing: bool = False
+    args = Args().parse_args()
+    if not args.save_dir:
+        args.save_dir = Path(getenv('DATASETS', '')) / 'verl' / f'{args.dataset_dir.name}'
+        print(f"No save_dir specified. Using default: {args.save_dir}")
 
-    if local_dataset_path is not None:
-        dataset = datasets.load_dataset(local_dataset_path, "default")
-    else:
-        # Force redownload / avoid using cached dataset files
-        dataset = datasets.load_dataset(data_source, "default")
+    dataset = datasets.load_dataset(str(args.dataset_dir))
     assert isinstance(dataset, datasets.DatasetDict), f"Expected a DatasetDict but got {type(dataset)}:\n{dataset}"
 
     for name, split in dataset.items():
-        print(f"{name} dataset length: {len(split)}")
-        split = split.map(function=make_map_fn(name), with_indices=True)
+        logger.info(f"{name} dataset length: {len(split)}")
+
+        if args.sample_ratio < 1.0:
+            split_size = len(split)
+            sampled_idxs = sample(range(split_size), k=int(split_size * args.sample_ratio))
+            split = split.select(sampled_idxs)
+            logger.info(f"After sampling with ratio {args.sample_ratio}, new length: {len(split)}")
+
+        split = split.map(function=make_map_fn(split, name), with_indices=True)
         if args.phasing:
             split = phase_dataset(split)
-        split.to_parquet(local_save_dir / f'{name}.parquet')
-    
-
-    if hdfs_dir is not None:
-        makedirs(hdfs_dir)
-        copy(src=local_save_dir, dst=hdfs_dir)
+        split.to_parquet(args.save_dir / f'{name}.parquet')
+        logger.info(f"Saved processed {name} dataset to {args.save_dir / f'{name}.parquet'}")
