@@ -6,6 +6,7 @@ set -x
 # export max_prompt_length_by_k=4
 # export response_length_by_k=4
 # export batch_size=64
+# export n_samples=1
 # export temperature=0.01
 # export tp=1
 # export pp=1
@@ -41,6 +42,7 @@ python3 -m verl.trainer.main_generation \
     data.prompt_key=prompt \
     data.batch_size=$batch_size \
     data.output_path=$save_path \
+    data.n_samples=$n_samples \
     +data.trust_remote_code=true \
     model.path=$model_dir \
     +model.trust_remote_code=true \
