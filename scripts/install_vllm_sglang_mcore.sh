@@ -1,5 +1,14 @@
 #!/bin/bash
 
+conda create -n verl python=3.12 -y
+conda activate verl
+
+conda install nvidia::cuda-nvcc==12.8.93 conda-forge::cudnn==9.10.2.21 -y
+
+export TMPDIR=$VEPFS/tmp
+export UV_CACHE_DIR=$VEPFS/tmp/uv
+mkdir -p $TMPDIR $UV_CACHE_DIR
+
 USE_MEGATRON=${USE_MEGATRON:-1}
 USE_SGLANG=${USE_SGLANG:-1}
 
@@ -19,7 +28,7 @@ uv pip install "transformers[hf_xet]>=4.51.0" accelerate datasets peft hf-transf
 
 echo "pyext is lack of maintainace and cannot work with python 3.12."
 echo "if you need it for prime code rewarding, please install using patched fork:"
-echo "uv pip install git+https://github.com/ShaohonChen/PyExt.git@py311support"
+echo "uv pip install git+https://ghfast.top/https://github.com/ShaohonChen/PyExt.git@py311support"
 
 uv pip install "nvidia-ml-py>=12.560.30" "fastapi[standard]>=0.115.0" "optree>=0.13.0" "pydantic>=2.9" "grpcio>=1.62.1"
 
@@ -29,15 +38,15 @@ echo "3. install FlashAttention and FlashInfer"
 # MAX_JOBS=16 uv pip install --no-cache-dir flash_attn==2.8.1 --no-build-isolation
 wget -nv https://ghfast.top/https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.1/flash_attn-2.8.1+cu12torch2.8cxx11abiFALSE-cp312-cp312-linux_x86_64.whl && \
     uv pip install --no-cache-dir flash_attn-2.8.1+cu12torch2.8cxx11abiFALSE-cp312-cp312-linux_x86_64.whl
-MAX_JOBS=16 uv pip install --no-cache-dir flashinfer-python==0.3.1
+uv pip install --no-cache-dir flashinfer-python==0.3.1
 
 
 if [ $USE_MEGATRON -eq 1 ]; then
     echo "4. install TransformerEngine and Megatron"
     echo "Notice that TransformerEngine installation can take very long time, please be patient"
     uv pip install "onnxscript==0.3.1"
-    NVTE_FRAMEWORK=pytorch  uv pip install --no-deps git+https://github.com/NVIDIA/TransformerEngine.git@v2.6
-    uv uv pip install --no-deps git+https://github.com/NVIDIA/Megatron-LM.git@core_v0.13.1
+    NVTE_FRAMEWORK=pytorch  uv pip install --no-deps git+https://ghfast.top/https://github.com/NVIDIA/TransformerEngine.git@v2.6
+    uv pip install --no-deps git+https://ghfast.top/https://github.com/NVIDIA/Megatron-LM.git@core_v0.13.1
 fi
 
 
@@ -53,3 +62,10 @@ if [ $USE_MEGATRON -eq 1 ]; then
 fi
 
 echo "Successfully installed all packages"
+
+uv pip install liger_kernel
+CAUSAL_CONV1D_FORCE_BUILD=TRUE uv pip install --no-build-isolation git+https://ghfast.top/https://github.com/Dao-AILab/causal-conv1d.git
+MAMBA_FORCE_BUILD=TRUE uv pip install --no-build-isolation git+https://ghfast.top/https://github.com/state-spaces/mamba.git
+
+uv clean
+conda clean --all -y
