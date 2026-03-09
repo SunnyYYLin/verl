@@ -1,28 +1,28 @@
 #!/bin/bash
 
-export target="debug"
-export VEPFS=/vepfs-mlp2/mlp-public/zhongcuiting
-export MODELS=$VEPFS/models
-export nproc_per_node=8
-export max_prompt_length_by_k=2
-export learning_rate=1e-4
-export weight_decay=1e-1
-export lora_rank=0
-export lora_alpha=32
-export batch_size=96
-export batch_size_per_gpu=12
-export dataset_dir=/tos-mlp-zgci/zhongcuiting/verl_dataset/ABC_K562/sft_dataset_org
-export model_dir=$MODELS/HybriDNA-300M-instruct
-export save_freq=20
-export test_freq=20
-export epochs=20
-export dtype=bf16
-export OMP_NUM_THREADS=16
-export data_name="ABC_K562_org_hg19"
+# export target="debug-offline"
+# export VEPFS=/vepfs-mlp2/mlp-public/zhongcuiting
+# export MODELS=$VEPFS/models
+# export nproc_per_node=1
+# export max_prompt_length_by_k=4
+# export learning_rate=1e-4
+# export weight_decay=1e-1
+# export lora_rank=0
+# export lora_alpha=32
+# export batch_size=96
+# export batch_size_per_gpu=2
+# export dataset_dir=/vepfs-mlp2/mlp-public/zhongcuiting/verl_dataset/org_topK_sft_input/K562_abc_org_hg19_top0.02
+# export model_dir=$MODELS/HybriDNA-300M-instruct
+# export save_freq=20
+# export test_freq=20
+# export epochs=20
+# export dtype=bf16
+# export OMP_NUM_THREADS=16
+# export data_name="ABC_K562_org_hg19_top0.02"
 
 set -x
 
-EXPERIMENT_NAME="${target}-${data_name}-${max_prompt_length_by_k}k-bs${batch_size}_p${batch_size_per_gpu}-lr${learning_rate}-wd${weight_decay}-${nproc_per_node}gpu"
+EXPERIMENT_NAME="${target}-${data_name}-${max_prompt_length_by_k}k-bs${batch_size}_p${batch_size_per_gpu}-lr${learning_rate}-wd${weight_decay}-${nproc_per_node}gpu-${epochs}ep"
 if [ "$lora_rank" != "0" ]; then
      EXPERIMENT_NAME="${EXPERIMENT_NAME}-lora${lora_rank}_${lora_alpha}"
 fi
@@ -38,7 +38,7 @@ else
 fi
 
 if [[ "$target" == *debug* ]]; then
-     EXTRA_ENV='CUDA_LAUNCH_BLOCKING=1 NCCL_DEBUG=INFO PYTHONFAULTHANDLER=1 TORCH_DISTRIBUTED_DEBUG=DETAIL PYTHONUNBUFFERED=1 VERL_SFT_LOGGING_LEVEL=DEBUG TRANSFORMERS_VERBOSITY=debug HYDRA_FULL_ERROR=1'
+     EXTRA_ENV='CUDA_LAUNCH_BLOCKING=1 TORCH_USE_CUDA_DSA=1 NCCL_DEBUG=INFO PYTHONFAULTHANDLER=1 TORCH_DISTRIBUTED_DEBUG=DETAIL PYTHONUNBUFFERED=1 VERL_SFT_LOGGING_LEVEL=DEBUG TRANSFORMERS_VERBOSITY=debug HYDRA_FULL_ERROR=1'
 else
      EXTRA_ENV=''
 fi

@@ -26,6 +26,8 @@ os.environ["TOKENIZERS_PARALLELISM"] = "true"
 import logging
 import re
 import time
+import sys
+import importlib.util
 from contextlib import nullcontext
 
 import hydra
@@ -130,6 +132,8 @@ class FSDPSFTTrainer:
 
         self.load_checkpoint()
 
+        self._build_custom_metric_fn()
+
         if self.device_mesh.get_rank() == 0:
             print(self.config)
         self.device_name = self.config.trainer.device
@@ -146,6 +150,33 @@ class FSDPSFTTrainer:
         self.config.data.train_batch_size //= dp_size
 
         assert self.config.data.train_batch_size % self.config.data.micro_batch_size_per_gpu == 0
+
+    def _build_custom_metric_fn(self):
+        metric_fn_config = self.config.trainer.get("custom_metric_fn", None)
+        if metric_fn_config is None or metric_fn_config.get("path", None) is None:
+            self.custom_metric_fn = None
+            return
+
+        file_path = metric_fn_config.path
+        function_name = metric_fn_config.get("name", "compute_metrics")
+        metric_kwargs = metric_fn_config.get("kwargs", {})
+
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Custom metric function file '{file_path}' not found.")
+
+        module_name = "sft_custom_metric_module"
+        spec = importlib.util.spec_from_file_location(module_name, file_path)
+        assert spec is not None
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+
+        raw_fn = getattr(module, function_name)
+        self.custom_metric_fn = lambda *args, **kwargs: raw_fn(*args, **kwargs, **metric_kwargs)
+
+        if self.device_mesh.get_rank() == 0:
+            print(f"Loaded custom metric function '{function_name}' from {file_path}")
 
     def _build_dataloader(self, train_dataset, val_dataset):
         # build dataset
@@ -259,6 +290,14 @@ class FSDPSFTTrainer:
                 )
             t_model_load_end = time.time()
             print(f"[dbg] finished model.from_pretrained (t={t_model_load_end - t_model_load_start:.2f}s)", flush=True)
+
+            # Resize token embeddings if necessary
+            if len(self.tokenizer) != self.model.get_input_embeddings().weight.shape[0]:
+                if self.device_mesh.get_rank() == 0:
+                    print(
+                        f"Resizing token embeddings from {self.model.get_input_embeddings().weight.shape[0]} to {len(self.tokenizer)}"
+                    )
+                self.model.resize_token_embeddings(len(self.tokenizer))
 
             if self.use_remove_padding or self.config.ulysses_sequence_parallel_size > 1:
                 from verl.models.transformers.monkey_patch import apply_monkey_patch
@@ -391,7 +430,7 @@ class FSDPSFTTrainer:
         else:
             raise ValueError(f"Unknown lr scheduler: {self.config.optim.lr_scheduler}")
 
-    def _compute_loss_and_backward(self, batch, do_backward=True, n_micro_batches=1):
+    def _compute_loss_and_backward(self, batch, do_backward=True, n_micro_batches=1, return_outputs=False):
         """Compute loss with optional sequence parallelism and remove padding features"""
         use_sp = self.use_remove_padding and self.config.ulysses_sequence_parallel_size > 1
         is_regression = self.config.model.get('task') == 'regression'
@@ -506,6 +545,9 @@ class FSDPSFTTrainer:
 
             if do_backward:
                 loss.backward()
+
+            if return_outputs:
+                return {"loss": loss, "logits": logits if not use_sp else None}
             return loss
 
     def training_step(self, batch: TensorDict):
@@ -572,13 +614,19 @@ class FSDPSFTTrainer:
     def validation_step(self, batch: TensorDict):
         self.fsdp_model.eval()
         with torch.no_grad():
-            loss = self._compute_loss_and_backward(batch, do_backward=False)
+            outputs = self._compute_loss_and_backward(batch, do_backward=False, return_outputs=True)
+            loss = outputs["loss"]
             if is_cuda_available:
                 torch.distributed.all_reduce(loss, op=torch.distributed.ReduceOp.AVG)
             elif is_npu_available:
                 torch.distributed.all_reduce(loss)
                 loss /= self.device_mesh.size(0)
-        return loss
+
+            res = {"loss": loss}
+            if self.custom_metric_fn is not None:
+                custom_metrics = self.custom_metric_fn(model=self.fsdp_model, batch=batch, outputs=outputs)
+                res.update(custom_metrics)
+        return res
 
     def save_checkpoint(self, step):
         """Save checkpoint using FSDPCheckpointManager with improved tracking"""
@@ -818,18 +866,25 @@ class FSDPSFTTrainer:
                 # early exit or validation step
                 if is_last_step or (self.config.trainer.test_freq > 0 and is_valid_step):
                     # Perform validation
-                    val_losses = []
+                    val_metrics_list = []
                     for val_data in self.val_dataloader:
                         val_data = TensorDict(val_data, batch_size=self.config.data.micro_batch_size_per_gpu).to(
                             self.device_name
                         )
-                        val_loss = self.validation_step(val_data)
-                        val_losses.append(val_loss)
+                        val_metrics = self.validation_step(val_data)
+                        val_metrics_list.append(val_metrics)
                     if rank == 0:
-                        val_loss = torch.mean(torch.stack(val_losses))
-                        metric = {"val/loss": val_loss.detach().item()}
-                        tracking.log(data=metric, step=global_step)
-                        last_valid_metric = metric
+                        # Aggregate metrics
+                        aggregated_metrics = {}
+                        for key in val_metrics_list[0].keys():
+                            values = [m[key] for m in val_metrics_list]
+                            if isinstance(values[0], torch.Tensor):
+                                aggregated_metrics[f"val/{key}"] = torch.mean(torch.stack(values)).detach().item()
+                            else:
+                                aggregated_metrics[f"val/{key}"] = sum(values) / len(values)
+
+                        tracking.log(data=aggregated_metrics, step=global_step)
+                        last_valid_metric = aggregated_metrics
                     torch.distributed.barrier()
 
                 if is_last_step or (self.config.trainer.save_freq > 0 and is_save_step):
